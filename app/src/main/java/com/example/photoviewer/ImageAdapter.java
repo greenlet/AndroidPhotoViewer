@@ -49,10 +49,11 @@ public class ImageAdapter extends BaseAdapter {
 
     @Override
     public View getView(int i, View view, ViewGroup viewGroup) {
-        Log.d(TAG, "getView: " + i);
+//        Log.d(TAG, "getView: " + i);
         String imagePath = imagePaths.get(i);
         File imageFile = new File(imagePath);
         if(imageFile.exists()){
+//            Log.d(TAG, "" + imageFile.toURI());
             if (view == null) {
                 view = LayoutInflater.from(context).inflate(R.layout.image_preview, null);
             }
@@ -76,7 +77,7 @@ public class ImageAdapter extends BaseAdapter {
         } else {
             view = null;
         }
-        Log.d(TAG, "view: " + view);
+//        Log.d(TAG, "view: " + view);
         return view;
     }
 

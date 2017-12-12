@@ -2,9 +2,12 @@ package com.example.photoviewer;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.database.ContentObserver;
 import android.database.Cursor;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.os.Handler;
 import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
@@ -23,6 +26,8 @@ public class MainActivity extends AppCompatActivity {
     private static final int IMAGES_REQUEST_CODE = 2;
     private GridView gridGallery;
     private ImageAdapter imageAdapter;
+    boolean permissionGranted = false;
+    private ContentObserver imagesObserver;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,6 +77,52 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (permissionGranted) {
+            subscribeForImageChanges();
+            updateImages();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        unsubscribeForImageChanges();
+    }
+
+    private void subscribeForImageChanges() {
+//        String imagesPath = Environment.getExternalStorageDirectory().toString() + "/DCIM";
+//        Uri imagesUri = Uri.parse(imagesPath);
+        Uri imagesUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+        if (imagesUri != null) {
+            Log.d(TAG, "Registering content observer for uri: " + imagesUri);
+            imagesObserver = new ContentObserver(new Handler(getMainLooper())) {
+                private static final String TAG = "ContentObserver";
+
+                @Override
+                public void onChange(boolean selfChange) {
+                    onChange(selfChange, null);
+                }
+
+                @Override
+                public void onChange(boolean selfChange, Uri uri) {
+                    Log.d(TAG, String.format("onChange. selfChange: %s. uri: %s", selfChange, uri));
+                    updateImages();
+                }
+            };
+            getContentResolver().registerContentObserver(imagesUri, true, imagesObserver);
+        }
+    }
+
+    private void unsubscribeForImageChanges() {
+        if (imagesObserver != null) {
+            Log.d(TAG, "Unregistering content observer");
+            getContentResolver().unregisterContentObserver(imagesObserver);
+        }
+    }
+
     public void onPermissionResult(String error) {
         if (error != null) {
             String errStr = "Error: " + error;
@@ -79,35 +130,42 @@ public class MainActivity extends AppCompatActivity {
             toast.show();
             Log.w(TAG, error);
         } else {
-            searchImages();
+            permissionGranted = true;
+            subscribeForImageChanges();
+            updateImages();
         }
     }
 
-    private void searchImages() {
+    private void updateImages() {
         List<String> paths = getCameraImagePahts();
         imageAdapter.setImagePaths(paths);
-        gridGallery.requestLayout();
+        imageAdapter.notifyDataSetChanged();
     }
 
     private List<String> getCameraImagePahts() {
         Log.d(TAG, "getCameraImagePahts");
-        final String[] projection = {MediaStore.Images.Media.DATA};
+        final String[] columns = {MediaStore.Images.Media.DATA};
 //        final String selection = MediaStore.Images.Media.BUCKET_ID + " = ?";
 //        String imagesPath = Environment.getExternalStorageDirectory().toString()
-//                + "/DCIM/Camera";
+//                + "/DCIM";
+//        Log.d(TAG, "imagesPath: " + imagesPath);
 //        String imagesBucketId = String.valueOf(imagesPath.toLowerCase().hashCode());
 //        final String[] selectionArgs = {imagesBucketId};
+        String selection = MediaStore.Images.Media.DATA + " LIKE? ";
+        String[] selectionArgs = {Environment.getExternalStorageDirectory().toString() + "/DCIM/%"};
+        String sortOrder = MediaStore.Images.ImageColumns.DATE_TAKEN + " DESC";
         final Cursor cursor = getContentResolver().query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                projection,
-                null,
-                null,
-                null);
+                columns,
+                selection,
+                selectionArgs,
+                sortOrder);
         ArrayList<String> result = new ArrayList<String>(cursor.getCount());
 
         if (cursor.moveToFirst()) {
             final int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
             do {
                 final String data = cursor.getString(dataColumn);
+//                Log.d(TAG, data);
                 result.add(data);
             } while (cursor.moveToNext());
         }
